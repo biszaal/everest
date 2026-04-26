@@ -1,0 +1,51 @@
+# Dependencies
+node_modules/
+**/node_modules/
+
+# Env / secrets
+.env
+.env.local
+.env.*.local
+**/.env
+**/.env.local
+**/.env.*.local
+
+# Expo / EAS
+.expo/
+.expo-shared/
+**/.expo/
+**/.expo-shared/
+dist/
+web-build/
+
+# iOS / Android build outputs (only relevant after `expo prebuild`)
+ios/Pods/
+ios/build/
+android/.gradle/
+android/build/
+android/app/build/
+**/*.xcuserstate
+
+# macOS / editors / IDEs
+.DS_Store
+.idea/
+.vscode/
+*.swp
+*.swo
+.qodo/
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Cred / signing
+*.pem
+*.key
+*.p12
+*.mobileprovision
+*.jks
+*.keystore
+GoogleService-Info.plist
+google-services.json
