@@ -18,7 +18,8 @@ import Animated, {
   useSharedValue,
   withTiming,
 } from 'react-native-reanimated';
-import { ResizeMode, Video as AVVideo, type AVPlaybackStatus } from 'expo-av';
+import { useVideoPlayer, VideoView, type VideoPlayer } from 'expo-video';
+type VideoViewRef = React.ComponentRef<typeof VideoView>;
 import * as Brightness from 'expo-brightness';
 import { WebView } from 'react-native-webview';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -82,8 +83,8 @@ export const FloatingPlayer: React.FC = () => {
   const { statusFor: downloadStatusFor, isDownloadable, startDownload, cancelDownload, deleteDownload } =
     useDownloads();
 
-  const videoRef = useRef<AVVideo>(null);
   const lastPersistRef = useRef(0);
+  const videoViewRef = useRef<VideoViewRef | null>(null);
   const lastBrightnessApplied = useRef(0);
   const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const indicatorHideTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -178,43 +179,75 @@ export const FloatingPlayer: React.FC = () => {
     [current],
   );
 
-  const onPlaybackStatus = useCallback(
-    (status: AVPlaybackStatus) => {
-      if (!status.isLoaded) return;
-      setBuffering(status.isBuffering ?? false);
-      setPlayingState(status.isPlaying);
-      const pos = (status.positionMillis ?? 0) / 1000;
-      const dur = (status.durationMillis ?? 0) / 1000;
-      setProgress(pos, dur);
-      if (pos > 0) persist(pos, dur);
-      if (status.didJustFinish && !status.isLooping) {
+  // Resolve playback source up-front (must run unconditionally before hooks below).
+  const downloadStatusEarly = current ? downloadStatusFor(current.videoId) : null;
+  const localPathEarly =
+    downloadStatusEarly?.status === 'done'
+      ? downloadStatusEarly.record?.localPath ?? null
+      : null;
+  const directSourceUriEarly = current ? localPathEarly ?? current.streamUrl ?? null : null;
+
+  const player: VideoPlayer = useVideoPlayer(directSourceUriEarly, (p) => {
+    p.staysActiveInBackground = true;
+    p.preservesPitch = true;
+    p.timeUpdateEventInterval = 0.5;
+  });
+
+  // Wire expo-video player events into our zustand store.
+  useEffect(() => {
+    const subs = [
+      player.addListener('playingChange', ({ isPlaying: playing }) => {
+        setPlayingState(playing);
+      }),
+      player.addListener('statusChange', ({ status }) => {
+        setBuffering(status === 'loading');
+      }),
+      player.addListener('timeUpdate', ({ currentTime }) => {
+        const dur = player.duration ?? 0;
+        setProgress(currentTime, dur);
+        if (currentTime > 0) persist(currentTime, dur);
+      }),
+      player.addListener('playToEnd', () => {
         if (autoPlay) skipNext();
         else setPlayingState(false);
-      }
-    },
-    [autoPlay, persist, setBuffering, setPlayingState, setProgress, skipNext],
-  );
+      }),
+    ];
+    return () => subs.forEach((s) => s.remove());
+  }, [player, autoPlay, persist, setBuffering, setPlayingState, setProgress, skipNext]);
 
-  const togglePlay = useCallback(async () => {
-    if (!videoRef.current) return;
+  // Push playback rate + volume changes from store/state into the player.
+  useEffect(() => {
+    player.playbackRate = playbackRate;
+  }, [player, playbackRate]);
+
+  useEffect(() => {
+    player.volume = volume;
+  }, [player, volume]);
+
+  // Honor autostart: play when the user has explicitly opted in.
+  useEffect(() => {
+    if (autostart) player.play();
+    else player.pause();
+  }, [player, autostart]);
+
+  const togglePlay = useCallback(() => {
     if (isPlaying) {
-      await videoRef.current.pauseAsync();
+      player.pause();
       setAutostart(false);
     } else {
-      await videoRef.current.playAsync();
+      player.play();
       setAutostart(true);
     }
     surfaceControls();
-  }, [isPlaying, setAutostart, surfaceControls]);
+  }, [isPlaying, player, setAutostart, surfaceControls]);
 
   const seekRelative = useCallback(
-    async (deltaMs: number) => {
-      if (!videoRef.current) return;
-      const nextMs = Math.max(0, position * 1000 + deltaMs);
-      await videoRef.current.setPositionAsync(nextMs);
+    (deltaMs: number) => {
+      const nextSec = Math.max(0, (player.currentTime ?? 0) + deltaMs / 1000);
+      player.currentTime = nextSec;
       surfaceControls();
     },
-    [position, surfaceControls],
+    [player, surfaceControls],
   );
 
   const closePlayer = useCallback(() => {
@@ -321,17 +354,13 @@ export const FloatingPlayer: React.FC = () => {
           {/* === Persistent media element. Stays mounted across mode swaps. === */}
           <View style={StyleSheet.absoluteFillObject}>
             {hasDirect ? (
-              <AVVideo
-                ref={videoRef}
-                source={{ uri: directSourceUri! }}
+              <VideoView
+                ref={videoViewRef}
+                player={player}
                 style={StyleSheet.absoluteFillObject}
-                resizeMode={ResizeMode.CONTAIN}
-                useNativeControls={false}
-                shouldPlay={autostart}
-                volume={volume}
-                rate={playbackRate}
-                shouldCorrectPitch
-                onPlaybackStatusUpdate={onPlaybackStatus}
+                contentFit="contain"
+                nativeControls={false}
+                allowsPictureInPicture
               />
             ) : hasEmbed ? (
               <WebView
@@ -607,19 +636,17 @@ export const FloatingPlayer: React.FC = () => {
 
                   {hasDirect ? (
                     <Pressable
-                      onPress={async () => {
+                      onPress={() => {
                         try {
                           if (pipActive) {
-                            // @ts-expect-error setPictureInPictureModeAsync added in expo-av 14; types may lag
-                            await videoRef.current?.setPictureInPictureModeAsync?.(false);
+                            videoViewRef.current?.stopPictureInPicture?.();
                             setPipActive(false);
                           } else {
-                            // @ts-expect-error see above
-                            await videoRef.current?.setPictureInPictureModeAsync?.(true);
+                            videoViewRef.current?.startPictureInPicture?.();
                             setPipActive(true);
                           }
                         } catch {
-                          // Ignored: PIP unavailable in current build (e.g. Expo Go without dev client)
+                          // Ignored: PIP unavailable in current build / platform combo
                         }
                       }}
                       style={[

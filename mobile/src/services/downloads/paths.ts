@@ -1,4 +1,7 @@
-import * as FileSystem from 'expo-file-system';
+// SDK 55: the expo-file-system top-level export is the new File/Directory API.
+// We use the legacy `documentDirectory` / `downloadAsync` / `getInfoAsync` style here,
+// available at `expo-file-system/legacy` for backward-compat.
+import * as FileSystem from 'expo-file-system/legacy';
 
 const ROOT = `${FileSystem.documentDirectory}videos/`;
 

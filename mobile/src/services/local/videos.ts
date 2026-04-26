@@ -97,7 +97,7 @@ export const videosService = {
         video.embedUrl,
         video.durationSec ?? null,
         video.createdAt,
-        video.folderId,
+        video.folderId ?? null,
       ],
     );
     return video;

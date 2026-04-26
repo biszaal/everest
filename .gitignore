@@ -33,6 +33,7 @@ android/app/build/
 *.swp
 *.swo
 .qodo/
+.history/
 
 # Logs
 *.log

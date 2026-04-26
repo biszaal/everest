@@ -1,18 +1,12 @@
-// NativeWind v4 + Expo SDK 51 + Reanimated 3.10.
-// We can't use `nativewind/babel` directly because react-native-css-interop@0.2.3
-// unconditionally requires `react-native-worklets/plugin` (only needed by Reanimated 4+).
-// Inline css-interop's two required pieces and add the reanimated plugin manually.
+// SDK 55 setup: stock NativeWind preset (now compatible because we have
+// react-native-worklets installed for Reanimated 4). babel-preset-expo
+// auto-includes the reanimated worklets plugin.
 module.exports = function (api) {
   api.cache(true);
   return {
-    presets: [['babel-preset-expo', { jsxImportSource: 'nativewind' }]],
-    plugins: [
-      require.resolve('react-native-css-interop/dist/babel-plugin'),
-      [
-        '@babel/plugin-transform-react-jsx',
-        { runtime: 'automatic', importSource: 'react-native-css-interop' },
-      ],
-      'react-native-reanimated/plugin',
+    presets: [
+      ['babel-preset-expo', { jsxImportSource: 'nativewind' }],
+      'nativewind/babel',
     ],
   };
 };

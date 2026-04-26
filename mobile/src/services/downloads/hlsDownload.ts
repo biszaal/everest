@@ -1,4 +1,4 @@
-import * as FileSystem from 'expo-file-system';
+import * as FileSystem from 'expo-file-system/legacy';
 
 import { deleteVideoDir, ensureVideoDir } from './paths';
 
@@ -153,10 +153,10 @@ export const startHlsDownload = (
     // 4. Tally total size.
     let sizeBytes = 0;
     for (const j of jobs) {
-      const info = await FileSystem.getInfoAsync(j.local, { size: true });
+      const info = await FileSystem.getInfoAsync(j.local);
       if (info.exists && 'size' in info && typeof info.size === 'number') sizeBytes += info.size;
     }
-    const miInfo = await FileSystem.getInfoAsync(manifestPath, { size: true });
+    const miInfo = await FileSystem.getInfoAsync(manifestPath);
     if (miInfo.exists && 'size' in miInfo && typeof miInfo.size === 'number') sizeBytes += miInfo.size;
 
     return { localPath: manifestPath, sizeBytes };

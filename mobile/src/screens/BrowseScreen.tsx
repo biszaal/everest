@@ -370,10 +370,14 @@ export const BrowseScreen: React.FC = () => {
 
   const continueWatching: { video: Video; progress: number; duration?: number }[] = useMemo(() => {
     const byId = new Map(videos.map((v) => [v.videoId, v]));
-    return progressList
-      .map((p) => ({ video: byId.get(p.videoId), progress: p.progress, duration: p.duration }))
-      .filter((x): x is { video: Video; progress: number; duration?: number } => Boolean(x.video))
-      .slice(0, 8);
+    const out: { video: Video; progress: number; duration?: number }[] = [];
+    for (const p of progressList) {
+      const video = byId.get(p.videoId);
+      if (!video) continue;
+      out.push({ video, progress: p.progress, duration: p.duration });
+      if (out.length >= 8) break;
+    }
+    return out;
   }, [progressList, videos]);
 
   const recent = videos.slice(0, 6);

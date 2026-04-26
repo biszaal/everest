@@ -2,31 +2,18 @@ import 'react-native-url-polyfill/auto';
 import 'react-native-gesture-handler';
 import './global.css';
 
-import React, { useEffect } from 'react';
+import React from 'react';
 import { StatusBar } from 'expo-status-bar';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
-import { Audio, InterruptionModeAndroid, InterruptionModeIOS } from 'expo-av';
 
 import { RootNavigator } from '@/navigation/RootNavigator';
 
-export default function App() {
-  useEffect(() => {
-    // Configure audio mode so the floating player can keep playing in the background
-    // (required for OS-level Picture-in-Picture on iOS to work as expected) and
-    // doesn't get silenced by the iOS hardware mute switch when the user wants sound.
-    Audio.setAudioModeAsync({
-      playsInSilentModeIOS: true,
-      staysActiveInBackground: true,
-      interruptionModeIOS: InterruptionModeIOS.DoNotMix,
-      interruptionModeAndroid: InterruptionModeAndroid.DoNotMix,
-      shouldDuckAndroid: true,
-      playThroughEarpieceAndroid: false,
-    }).catch(() => {
-      // Some platforms / Expo Go without proper plugin support may reject this; non-fatal.
-    });
-  }, []);
+// Background-audio + silent-mode overrides are configured per-player on the
+// `useVideoPlayer(...)` setup hook in FloatingPlayer (`p.staysActiveInBackground = true`),
+// matching the new expo-video architecture in Expo SDK 55+.
 
+export default function App() {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>

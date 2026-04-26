@@ -49,9 +49,10 @@
     },
     "plugins": [
       [
-        "expo-av",
+        "expo-video",
         {
-          "microphonePermission": false
+          "supportsBackgroundPlayback": true,
+          "supportsPictureInPicture": true
         }
       ]
     ]

@@ -1,4 +1,4 @@
-import * as FileSystem from 'expo-file-system';
+import * as FileSystem from 'expo-file-system/legacy';
 
 import { deleteVideoDir, ensureVideoDir, extFromUrl } from './paths';
 
@@ -35,7 +35,8 @@ export const startDirectDownload = (
     if (cancelled) throw new Error('Download cancelled');
     if (!result) throw new Error('Download failed');
 
-    const info = await FileSystem.getInfoAsync(result.uri, { size: true });
+    // Legacy expo-file-system in SDK 55+ returns size by default — no options needed.
+    const info = await FileSystem.getInfoAsync(result.uri);
     const sizeBytes = info.exists && 'size' in info && typeof info.size === 'number' ? info.size : 0;
     return { localPath: result.uri, sizeBytes };
   })();

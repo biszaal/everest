@@ -15,7 +15,6 @@ export const useFolders = () => {
     try {
       const [list, c] = await Promise.all([
         playlistsService.list(),
-        // @ts-expect-error counts is only on the local service; remote returns undefined.
         playlistsService.counts?.() ?? Promise.resolve({}),
       ]);
       setFolders(list);
@@ -34,7 +33,6 @@ export const useFolders = () => {
   }, []);
 
   const remove = useCallback(async (folderId: string, moveVideosToRoot = true) => {
-    // @ts-expect-error second arg is only implemented by the local service.
     await playlistsService.remove(folderId, moveVideosToRoot);
     setFolders((prev) => prev.filter((f) => f.playlistId !== folderId));
     setCounts((prev) => {
@@ -44,7 +42,6 @@ export const useFolders = () => {
   }, []);
 
   const rename = useCallback(async (folderId: string, name: string) => {
-    // @ts-expect-error rename is only on the local service.
     await playlistsService.rename?.(folderId, name);
     setFolders((prev) =>
       prev.map((f) => (f.playlistId === folderId ? { ...f, name, updatedAt: new Date().toISOString() } : f)),
