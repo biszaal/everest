@@ -2,6 +2,7 @@
   "expo": {
     "name": "Everest Flow",
     "slug": "everest-flow",
+    "owner": "biszaal",
     "version": "0.1.0",
     "orientation": "portrait",
     "scheme": "everestflow",
@@ -21,7 +22,9 @@
           "NSAllowsArbitraryLoads": true,
           "NSAllowsArbitraryLoadsInWebContent": true
         },
-        "UIBackgroundModes": ["audio"]
+        "UIBackgroundModes": [
+          "audio"
+        ]
       }
     },
     "android": {
@@ -29,7 +32,10 @@
       "versionCode": 1,
       "adaptiveIcon": {
         "backgroundColor": "#0B0B10"
-      }
+      },
+      "permissions": [
+        "android.permission.MODIFY_AUDIO_SETTINGS"
+      ]
     },
     "web": {
       "bundler": "metro"
@@ -38,7 +44,7 @@
       "supabaseUrl": "$EXPO_PUBLIC_SUPABASE_URL",
       "supabaseAnonKey": "$EXPO_PUBLIC_SUPABASE_ANON_KEY",
       "eas": {
-        "projectId": "REPLACE_AFTER_eas_init"
+        "projectId": "2c16992f-519e-4ae2-839c-489ede3e10fb"
       }
     },
     "plugins": [
