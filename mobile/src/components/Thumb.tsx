@@ -15,16 +15,10 @@ export const hueFor = (id: string): number => {
 const hsl = (h: number, s: number, l: number) => `hsl(${h}, ${s}%, ${l}%)`;
 
 const platformLabel = (p: Video['platform']): string => {
-  switch (p) {
-    case 'youtube':
-      return 'YT';
-    case 'vimeo':
-      return 'VM';
-    case 'direct':
-      return 'MP4';
-    default:
-      return '···';
-  }
+  if (p === 'youtube') return 'youtube';
+  if (p === 'vimeo') return 'vimeo';
+  if (p === 'direct') return 'direct';
+  return 'link';
 };
 
 interface Props {
@@ -34,6 +28,8 @@ interface Props {
   radius?: number;
   showProgress?: boolean;
   progress?: number;
+  /** When true, render a small checkmark badge top-right indicating an offline copy is present. */
+  downloaded?: boolean;
   onPress?: () => void;
   style?: ViewStyle;
 }
@@ -50,6 +46,7 @@ export const Thumb: React.FC<Props> = ({
   radius = 10,
   showProgress = false,
   progress = 0,
+  downloaded = false,
   onPress,
   style,
 }) => {
@@ -82,29 +79,49 @@ export const Thumb: React.FC<Props> = ({
         />
       ) : null}
 
-      {/* platform badge */}
+      {/* platform tag (top-left) — uppercase via letterSpacing + textTransform */}
       <View
         style={{
           position: 'absolute',
-          top: 6,
-          right: 6,
-          backgroundColor: 'rgba(0,0,0,0.6)',
-          borderRadius: 4,
+          top: 5,
+          left: 5,
+          backgroundColor: 'rgba(0,0,0,0.55)',
+          borderRadius: 3,
           paddingHorizontal: 5,
           paddingVertical: 1,
         }}
       >
         <Text
           style={{
-            color: 'rgba(255,255,255,0.85)',
+            color: 'rgba(255,255,255,0.78)',
             fontSize: 9,
             fontWeight: '700',
-            letterSpacing: 0.5,
+            letterSpacing: 0.4,
+            textTransform: 'uppercase',
           }}
         >
           {platformLabel(video.platform)}
         </Text>
       </View>
+
+      {/* downloaded badge (top-right) — small brand-blue circle with a checkmark */}
+      {downloaded ? (
+        <View
+          style={{
+            position: 'absolute',
+            top: 5,
+            right: 5,
+            width: 14,
+            height: 14,
+            borderRadius: 7,
+            backgroundColor: theme.colors.brand,
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}
+        >
+          <Text style={{ color: '#fff', fontSize: 9, lineHeight: 11, fontWeight: '900' }}>✓</Text>
+        </View>
+      ) : null}
 
       {/* center play circle */}
       <View

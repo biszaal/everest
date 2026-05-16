@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Everest Flow — Mobile</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700;9..40,800&display=swap" rel="stylesheet"/>
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<script type="text/babel" src="src/ios-frame.jsx"></script>
+<script type="text/babel" src="src/everest-core.jsx"></script>
+<script type="text/babel" src="src/everest-player.jsx"></script>
+<script type="text/babel" src="src/everest-screens.jsx"></script>
+<script type="text/babel" src="src/everest-mobile.jsx"></script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    width: 100%; height: 100%; overflow: hidden;
+    background: #07070A;
+    display: flex; align-items: center; justify-content: center;
+    font-family: 'DM Sans', system-ui, -apple-system, sans-serif;
+  }
+  body::before {
+    content: '';
+    position: fixed; inset: 0; z-index: 0; pointer-events: none;
+    background:
+      radial-gradient(ellipse 65% 50% at 22% 55%, rgba(59,130,246,0.06) 0%, transparent 70%),
+      radial-gradient(ellipse 50% 45% at 80% 38%, rgba(59,130,246,0.04) 0%, transparent 70%);
+  }
+  #root { position: relative; z-index: 1; }
+
+  /* Tweaks Panel */
+  #tweaks-panel {
+    position: fixed; bottom: 24px; right: 24px; z-index: 9999;
+    background: rgba(14,14,20,0.97);
+    backdrop-filter: blur(24px); -webkit-backdrop-filter: blur(24px);
+    border: 1px solid rgba(255,255,255,0.09);
+    border-radius: 20px; padding: 20px;
+    width: 260px; display: none;
+    box-shadow: 0 24px 60px rgba(0,0,0,0.75);
+    font-family: 'DM Sans', sans-serif; color: white;
+  }
+  #tweaks-panel.visible { display: block; }
+  .tw-title { font-size: 11px; font-weight: 800; letter-spacing: 1px; color: #6B7280; text-transform: uppercase; margin-bottom: 16px; }
+  .tw-label { font-size: 11px; color: #6B7280; font-weight: 700; letter-spacing: 0.3px; margin-bottom: 8px; }
+  .tw-row { margin-bottom: 14px; }
+  .tw-chips { display: flex; gap: 6px; flex-wrap: wrap; }
+  .tw-chip {
+    padding: 6px 12px; border-radius: 100px;
+    background: #1C1C24; border: 1px solid rgba(255,255,255,0.08);
+    font-size: 12px; font-weight: 600; color: #9CA3AF;
+    cursor: pointer; transition: all 0.18s;
+  }
+  .tw-chip.active { background: #3B82F6; border-color: #3B82F6; color: white; }
+  .tw-chip:hover:not(.active) { border-color: rgba(255,255,255,0.2); color: white; }
+  .tw-tip {
+    font-size: 10px; color: #6B7280; line-height: 1.45;
+    background: rgba(255,255,255,0.03); border-radius: 8px;
+    padding: 8px 10px; margin-top: 6px;
+  }
+</style>
+</head>
+<body>
+<div id="root"></div>
+
+<!-- Tweaks Panel — minimal: just a "jump to demo state" -->
+<div id="tweaks-panel">
+  <div class="tw-title">Tweaks · Demo State</div>
+
+  <div class="tw-row">
+    <div class="tw-label">Jump to screen</div>
+    <div class="tw-chips" id="tw-state">
+      <div class="tw-chip active" data-val="browse-home">Browse · Home</div>
+      <div class="tw-chip" data-val="browse-page">Browse · Page</div>
+      <div class="tw-chip" data-val="library">Library</div>
+      <div class="tw-chip" data-val="folder">Folder detail</div>
+      <div class="tw-chip" data-val="create-folder">+ Folder modal</div>
+      <div class="tw-chip" data-val="move-video">Move video</div>
+    </div>
+  </div>
+
+  <div class="tw-row">
+    <div class="tw-label">FloatingPlayer</div>
+    <div class="tw-chips" id="tw-player">
+      <div class="tw-chip active" data-val="hidden">Hidden</div>
+      <div class="tw-chip" data-val="pip">PIP card</div>
+      <div class="tw-chip" data-val="expanded">Expanded</div>
+    </div>
+  </div>
+
+  <div class="tw-tip">
+    Per spec: dark-only, Signal palette only. Privacy-first browser with on-device autosuggest.
+  </div>
+</div>
+
+<script type="text/babel">
+const { useState } = React;
+
+function Root() {
+  return (
+    <IOSDevice dark>
+      <EverestFlowApp/>
+    </IOSDevice>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<Root/>);
+</script>
+
+<script>
+(function() {
+  function updateChips(groupId, val) {
+    document.querySelectorAll(`#${groupId} .tw-chip`).forEach(c => {
+      c.classList.toggle('active', c.dataset.val === val);
+    });
+  }
+
+  // Demo state jumps — these set window globals that the app reads on next interaction,
+  // but the simplest is to just hint the user in the panel for now.
+  document.getElementById('tw-state').addEventListener('click', e => {
+    const chip = e.target.closest('.tw-chip');
+    if (!chip) return;
+    updateChips('tw-state', chip.dataset.val);
+    // Dispatch to bridge if app exposes one
+    if (window._everestJumpTo) window._everestJumpTo(chip.dataset.val);
+  });
+  document.getElementById('tw-player').addEventListener('click', e => {
+    const chip = e.target.closest('.tw-chip');
+    if (!chip) return;
+    updateChips('tw-player', chip.dataset.val);
+    if (window._everestSetPlayer) window._everestSetPlayer(chip.dataset.val);
+  });
+
+  window.addEventListener('message', e => {
+    if (e.data?.type === '__activate_edit_mode') document.getElementById('tweaks-panel').classList.add('visible');
+    else if (e.data?.type === '__deactivate_edit_mode') document.getElementById('tweaks-panel').classList.remove('visible');
+  });
+  window.parent.postMessage({ type: '__edit_mode_available' }, '*');
+})();
+</script>
+</body>
+</html>

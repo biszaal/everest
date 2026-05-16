@@ -21,6 +21,7 @@ interface IconPair {
 }
 
 const ICONS: Record<string, IconPair> = {
+  Home: { outline: 'home-outline', filled: 'home' },
   Browse: { outline: 'globe-outline', filled: 'globe' },
   Library: { outline: 'library-outline', filled: 'library' },
 };

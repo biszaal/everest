@@ -8,3 +8,13 @@ export const isLikelyUrl = (value: string): boolean => {
     return false;
   }
 };
+
+/** Extract a clean hostname for display (strips `www.`). Falls back to the input if it can't parse. */
+export const hostOf = (url: string): string => {
+  if (!url) return '';
+  try {
+    return new URL(url).host.replace(/^www\./, '');
+  } catch {
+    return url;
+  }
+};

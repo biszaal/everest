@@ -85,7 +85,9 @@ export type MainStackParamList = {
 };
 
 export type TabParamList = {
-  Browse: undefined;
+  Home: undefined;
+  /** Browse accepts an optional `url` param — Home tab uses this to deep-link to a bookmark. */
+  Browse: { url?: string } | undefined;
   Library: undefined;
 };
 

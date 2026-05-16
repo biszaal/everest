@@ -14,14 +14,14 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { WebView, WebViewMessageEvent, WebViewNavigation } from 'react-native-webview';
 
+import { useRoute, type RouteProp } from '@react-navigation/native';
+
 import { KeyboardSafeView } from '@/components/KeyboardSafeView';
-import { SectionHeader } from '@/components/SectionHeader';
 import { Thumb } from '@/components/Thumb';
-import { useVideos, useWatchProgress } from '@/hooks/useVideos';
-import { useQueue } from '@/hooks/useQueue';
-import { usePlayerStore } from '@/store/playerStore';
+import { useVideos } from '@/hooks/useVideos';
 import { theme } from '@/theme';
-import type { Video } from '@/types';
+import { hostOf, isLikelyUrl } from '@/utils/url';
+import type { TabParamList, Video } from '@/types';
 
 interface DetectedSource {
   kind: 'video' | 'source' | 'hls' | 'meta' | 'json-ld';
@@ -36,22 +36,16 @@ interface InjectedPayload {
   sources: DetectedSource[];
 }
 
-const HOME_URL = 'everest://home';
+// Default landing for the Browse tab — a privacy-friendly search engine that
+// gives the user something useful to act on without needing to type a URL first.
+const DEFAULT_URL = 'https://duckduckgo.com';
 
 const normaliseUserInput = (raw: string): string => {
   const v = raw.trim();
-  if (!v) return HOME_URL;
+  if (!v) return DEFAULT_URL;
   if (/^https?:\/\//i.test(v)) return v;
   if (/^[\w-]+(\.[\w-]+)+(\/|$)/.test(v)) return `https://${v}`;
   return `https://duckduckgo.com/?q=${encodeURIComponent(v)}`;
-};
-
-const hostOf = (url: string): string => {
-  try {
-    return new URL(url).host;
-  } catch {
-    return url;
-  }
 };
 
 const DETECT_SOURCES_JS = `
@@ -209,16 +203,213 @@ const BOOKMARKS: Bookmark[] = [
   { label: 'YouTube', url: 'https://m.youtube.com', icon: '▶', color: '#FF0000', bg: 'rgba(255,0,0,0.13)' },
 ];
 
+// ════════════════════════════════════════════════════════════════════════════════
+// AutosuggestSheet — rendered when the URL bar is focused. Pure on-device:
+// suggestions come from the user's saved videos and the curated BOOKMARKS list.
+// Nothing leaves the device — no Google/Bing/DDG autocomplete network call.
+// ════════════════════════════════════════════════════════════════════════════════
+interface AutosuggestProps {
+  urlText: string;
+  videos: Video[];
+  onSelectUrl: (url: string) => void;
+  onSelectBookmark: (bm: Bookmark) => void;
+}
+
+const AutosuggestSheet: React.FC<AutosuggestProps> = ({
+  urlText,
+  videos,
+  onSelectUrl,
+  onSelectBookmark,
+}) => {
+  const q = urlText.trim().toLowerCase();
+  const looksLikeUrl = q.length > 0 && (q.startsWith('http') || /^[\w-]+(\.[\w-]+)+/.test(q));
+
+  const matchedVideos = q
+    ? videos
+        .filter(
+          (v) =>
+            v.title.toLowerCase().includes(q) || hostOf(v.url).toLowerCase().includes(q),
+        )
+        .slice(0, 4)
+    : [];
+
+  const matchedBookmarks = q
+    ? BOOKMARKS.filter(
+        (bm) =>
+          bm.label.toLowerCase().includes(q) || bm.url.toLowerCase().includes(q),
+      )
+    : BOOKMARKS;
+
+  return (
+    <ScrollView
+      style={{ flex: 1, backgroundColor: theme.colors.bg }}
+      keyboardShouldPersistTaps="always"
+      contentContainerStyle={{ paddingBottom: 24 }}
+    >
+      {/* Go to typed URL */}
+      {looksLikeUrl ? (
+        <Pressable
+          onPress={() => onSelectUrl(urlText.trim())}
+          style={{
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: 12,
+            paddingHorizontal: 16,
+            paddingVertical: 14,
+            borderBottomWidth: 1,
+            borderBottomColor: theme.colors.line,
+          }}
+        >
+          <View
+            style={{
+              width: 36,
+              height: 36,
+              borderRadius: 8,
+              backgroundColor: theme.colors.brandSoft,
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+          >
+            <Text style={{ color: theme.colors.brand, fontSize: 14, fontWeight: '700' }}>↗</Text>
+          </View>
+          <View style={{ flex: 1, minWidth: 0 }}>
+            <Text style={{ fontSize: 13, fontWeight: '700', color: '#fff' }} numberOfLines={1}>
+              Go to {urlText.trim()}
+            </Text>
+            <Text style={{ fontSize: 11, color: theme.colors.textFaint, marginTop: 1 }}>
+              Open this address
+            </Text>
+          </View>
+        </Pressable>
+      ) : null}
+
+      {/* From your library */}
+      {matchedVideos.length > 0 ? (
+        <View style={{ paddingHorizontal: 16, paddingTop: 14, paddingBottom: 8 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 10 }}>
+            <Text style={{ fontSize: 11, color: theme.colors.textFaint }}>🛡</Text>
+            <Text
+              style={{
+                fontSize: 11,
+                fontWeight: '700',
+                color: theme.colors.textFaint,
+                letterSpacing: 1.2,
+                textTransform: 'uppercase',
+              }}
+            >
+              From your library
+            </Text>
+          </View>
+          {matchedVideos.map((v) => (
+            <Pressable
+              key={v.videoId}
+              onPress={() => onSelectUrl(v.url)}
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 10,
+                paddingVertical: 10,
+                borderBottomWidth: 1,
+                borderBottomColor: theme.colors.line,
+              }}
+            >
+              <Thumb video={v} width={44} height={26} radius={4} />
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <Text
+                  numberOfLines={1}
+                  style={{ fontSize: 13, fontWeight: '600', color: '#fff' }}
+                >
+                  {v.title}
+                </Text>
+                <Text style={{ fontSize: 11, color: theme.colors.textFaint, marginTop: 1 }}>
+                  {hostOf(v.url)}
+                </Text>
+              </View>
+            </Pressable>
+          ))}
+        </View>
+      ) : null}
+
+      {/* Shortcuts */}
+      <View style={{ paddingHorizontal: 16, paddingTop: 16, paddingBottom: 24 }}>
+        <Text
+          style={{
+            fontSize: 11,
+            fontWeight: '700',
+            color: theme.colors.textFaint,
+            letterSpacing: 1.2,
+            textTransform: 'uppercase',
+            marginBottom: 10,
+          }}
+        >
+          Shortcuts
+        </Text>
+        {matchedBookmarks.map((bm) => (
+          <Pressable
+            key={bm.label}
+            onPress={() => onSelectBookmark(bm)}
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: 10,
+              paddingVertical: 10,
+              borderBottomWidth: 1,
+              borderBottomColor: theme.colors.line,
+            }}
+          >
+            <View
+              style={{
+                width: 36,
+                height: 36,
+                borderRadius: 9,
+                backgroundColor: bm.bg,
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+            >
+              <Text style={{ fontSize: 16, color: bm.color }}>{bm.icon}</Text>
+            </View>
+            <View style={{ flex: 1, minWidth: 0 }}>
+              <Text style={{ fontSize: 13, fontWeight: '600', color: '#fff' }}>{bm.label}</Text>
+              <Text style={{ fontSize: 11, color: theme.colors.textFaint, marginTop: 1 }}>
+                {hostOf(bm.url)}
+              </Text>
+            </View>
+          </Pressable>
+        ))}
+
+        {/* Privacy note */}
+        <View
+          style={{
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: 6,
+            marginTop: 14,
+            padding: 10,
+            backgroundColor: theme.colors.bgCard2,
+            borderRadius: 10,
+          }}
+        >
+          <Text style={{ color: theme.colors.accent, fontSize: 12 }}>🛡</Text>
+          <Text style={{ flex: 1, fontSize: 11, color: theme.colors.textMuted, lineHeight: 15 }}>
+            Suggestions come only from your device. Nothing is sent over the network.
+          </Text>
+        </View>
+      </View>
+    </ScrollView>
+  );
+};
+
 export const BrowseScreen: React.FC = () => {
   const webRef = useRef<WebView | null>(null);
-  const { addVideo } = useVideos();
-  const { videos } = useVideos();
-  const { progress: progressList } = useWatchProgress();
-  const { setQueue } = useQueue();
-  const setExpanded = usePlayerStore((s) => s.setExpanded);
+  const route = useRoute<RouteProp<TabParamList, 'Browse'>>();
+  const { addVideo, videos } = useVideos();
 
-  const [currentUrl, setCurrentUrl] = useState(HOME_URL);
-  const [addressText, setAddressText] = useState('');
+  // Initial URL: from Home tab's nav param if present, otherwise the default landing.
+  const incomingUrl = route.params?.url;
+
+  const [currentUrl, setCurrentUrl] = useState(incomingUrl || DEFAULT_URL);
+  const [addressText, setAddressText] = useState(incomingUrl || DEFAULT_URL);
   const [canGoBack, setCanGoBack] = useState(false);
   const [canGoForward, setCanGoForward] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -232,35 +423,32 @@ export const BrowseScreen: React.FC = () => {
   const saveOnNextResult = useRef(false);
   const scanTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const isHome = currentUrl === HOME_URL;
+  // React to the Home tab navigating to Browse with a fresh URL param.
+  useEffect(() => {
+    if (incomingUrl && incomingUrl !== currentUrl) {
+      setCurrentUrl(incomingUrl);
+      setAddressText(incomingUrl);
+      setDetectedSources([]);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [incomingUrl]);
 
   useEffect(() => {
     if (Platform.OS !== 'android') return;
     const sub = BackHandler.addEventListener('hardwareBackPress', () => {
-      if (!isHome && canGoBack && webRef.current) {
+      if (canGoBack && webRef.current) {
         webRef.current.goBack();
-        return true;
-      }
-      if (!isHome) {
-        setCurrentUrl(HOME_URL);
-        setAddressText('');
         return true;
       }
       return false;
     });
     return () => sub.remove();
-  }, [canGoBack, isHome]);
+  }, [canGoBack]);
 
   const loadUrl = useCallback((raw: string) => {
     const next = normaliseUserInput(raw);
-    setAddressText(next === HOME_URL ? '' : next);
+    setAddressText(next);
     setCurrentUrl(next);
-    setDetectedSources([]);
-  }, []);
-
-  const goHome = useCallback(() => {
-    setCurrentUrl(HOME_URL);
-    setAddressText('');
     setDetectedSources([]);
   }, []);
 
@@ -368,354 +556,145 @@ export const BrowseScreen: React.FC = () => {
     );
   };
 
-  const continueWatching: { video: Video; progress: number; duration?: number }[] = useMemo(() => {
-    const byId = new Map(videos.map((v) => [v.videoId, v]));
-    const out: { video: Video; progress: number; duration?: number }[] = [];
-    for (const p of progressList) {
-      const video = byId.get(p.videoId);
-      if (!video) continue;
-      out.push({ video, progress: p.progress, duration: p.duration });
-      if (out.length >= 8) break;
-    }
-    return out;
-  }, [progressList, videos]);
-
-  const recent = videos.slice(0, 6);
-
-  const openVideoFromHome = (videoId: string) => {
-    const idx = videos.findIndex((v) => v.videoId === videoId);
-    setQueue(videos, idx >= 0 ? idx : 0);
-    setExpanded(true);
-  };
-
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: theme.colors.bg }} edges={['top']}>
-      {/* === Top chrome (URL bar) === */}
+      {/* === Top chrome (URL bar): back + forward chevrons, URL pill, refresh === */}
       <View
         style={{
           backgroundColor: theme.colors.bgElevated,
           borderBottomWidth: 1,
           borderBottomColor: theme.colors.line,
-          paddingHorizontal: 12,
-          paddingVertical: 8,
+          height: 56,
           flexDirection: 'row',
           alignItems: 'center',
-          gap: 8,
+          paddingHorizontal: 8,
+          gap: 4,
         }}
       >
         <Pressable
-          onPress={goHome}
+          onPress={() => webRef.current?.goBack()}
+          disabled={!canGoBack}
           style={{
             width: 36,
             height: 36,
-            borderRadius: 10,
+            borderRadius: 18,
             alignItems: 'center',
             justifyContent: 'center',
+            opacity: canGoBack ? 1 : 0.3,
           }}
         >
-          <Text style={{ color: theme.colors.textMuted, fontSize: 16 }}>⌂</Text>
+          <Text style={{ color: theme.colors.text, fontSize: 22, lineHeight: 22 }}>‹</Text>
+        </Pressable>
+        <Pressable
+          onPress={() => webRef.current?.goForward()}
+          disabled={!canGoForward}
+          style={{
+            width: 36,
+            height: 36,
+            borderRadius: 18,
+            alignItems: 'center',
+            justifyContent: 'center',
+            opacity: canGoForward ? 1 : 0.3,
+          }}
+        >
+          <Text style={{ color: theme.colors.text, fontSize: 22, lineHeight: 22 }}>›</Text>
         </Pressable>
 
         <View
           style={{
             flex: 1,
             height: 38,
-            borderRadius: 12,
-            backgroundColor: theme.colors.bgCard,
+            borderRadius: 100,
+            backgroundColor: theme.colors.bgCard2,
             borderWidth: 1,
-            borderColor: urlFocused ? theme.colors.brand : theme.colors.lineStrong,
+            borderColor: urlFocused ? theme.colors.brand : theme.colors.line,
             flexDirection: 'row',
             alignItems: 'center',
             paddingHorizontal: 12,
+            gap: 6,
           }}
         >
           {loading ? (
-            <ActivityIndicator size="small" color={theme.colors.textFaint} style={{ marginRight: 8 }} />
-          ) : (
-            <Text style={{ color: theme.colors.textFaint, fontSize: 11, marginRight: 7 }}>
-              {isHome ? '◯' : '🔒'}
-            </Text>
-          )}
+            <ActivityIndicator size="small" color={theme.colors.textFaint} />
+          ) : !urlFocused ? (
+            <Text style={{ color: theme.colors.textFaint, fontSize: 11 }}>🔒</Text>
+          ) : null}
           <TextInput
             value={addressText}
             onChangeText={setAddressText}
             onSubmitEditing={onSubmitAddress}
             onFocus={() => setUrlFocused(true)}
-            onBlur={() => setUrlFocused(false)}
+            onBlur={() => setTimeout(() => setUrlFocused(false), 120)}
             autoCapitalize="none"
             autoCorrect={false}
             keyboardType="url"
             selectTextOnFocus
             returnKeyType="go"
-            placeholder={isHome ? 'Search or enter address' : ''}
+            placeholder="Search or type URL"
             placeholderTextColor={theme.colors.textFaint}
-            style={{ flex: 1, color: '#fff', fontSize: 13 }}
+            style={{
+              flex: 1,
+              color: urlFocused ? '#fff' : theme.colors.textMuted,
+              fontSize: 14,
+              padding: 0,
+            }}
           />
+          {urlFocused && addressText.length > 0 ? (
+            <Pressable onPress={() => setAddressText('')} hitSlop={6}>
+              <Text style={{ color: theme.colors.textFaint, fontSize: 14 }}>✕</Text>
+            </Pressable>
+          ) : null}
         </View>
 
         <Pressable
-          onPress={() => (isHome ? onClearBrowsingData() : webRef.current?.reload())}
+          onPress={() => webRef.current?.reload()}
+          onLongPress={onClearBrowsingData}
           style={{
             width: 36,
             height: 36,
-            borderRadius: 10,
+            borderRadius: 18,
             alignItems: 'center',
             justifyContent: 'center',
           }}
         >
-          <Text style={{ color: theme.colors.textMuted, fontSize: 14 }}>{isHome ? '🔒' : '⟲'}</Text>
+          <Text style={{ color: theme.colors.textMuted, fontSize: 16 }}>⟲</Text>
         </Pressable>
       </View>
 
-      {/* === Video-detected banner (only when not on home and a video was found) === */}
-      {!isHome && detectedSources.length > 0 ? (
+      {/* === Video-detected banner — slim, brand-soft strip under the URL row === */}
+      {!urlFocused && detectedSources.length > 0 ? (
         <View
           style={{
             backgroundColor: theme.colors.brandSoft,
+            borderTopWidth: 1,
+            borderTopColor: theme.colors.brand,
             borderBottomWidth: 1,
-            borderBottomColor: 'rgba(59,130,246,0.19)',
-            paddingHorizontal: 16,
-            paddingVertical: 10,
+            borderBottomColor: theme.colors.brand,
+            height: 44,
+            paddingHorizontal: 14,
             flexDirection: 'row',
             alignItems: 'center',
+            gap: 10,
           }}
         >
-          <View
-            style={{
-              width: 32,
-              height: 32,
-              borderRadius: 8,
-              backgroundColor: theme.colors.brandSoft,
-              alignItems: 'center',
-              justifyContent: 'center',
-              marginRight: 10,
-            }}
+          <Text style={{ color: theme.colors.brand, fontSize: 14 }}>✦</Text>
+          <Text
+            numberOfLines={1}
+            style={{ color: theme.colors.brand, fontSize: 13, fontWeight: '600', flex: 1 }}
           >
-            <Text style={{ color: theme.colors.brand, fontSize: 14 }}>▶</Text>
-          </View>
-          <View style={{ flex: 1 }}>
-            <Text style={{ color: theme.colors.brand, fontSize: 12, fontWeight: '700' }}>
-              Video detected
-            </Text>
-            <Text style={{ color: theme.colors.textMuted, fontSize: 11 }} numberOfLines={1}>
-              {detectedSources.length} playable source{detectedSources.length === 1 ? '' : 's'} on this page
-            </Text>
-          </View>
-          <Pressable
-            onPress={onSavePress}
-            disabled={saving}
-            style={{
-              height: 32,
-              paddingHorizontal: 12,
-              borderRadius: 8,
-              backgroundColor: theme.colors.brand,
-              alignItems: 'center',
-              justifyContent: 'center',
-            }}
-          >
-            <Text style={{ color: '#fff', fontSize: 12, fontWeight: '700' }}>
-              {saving ? 'Saving…' : 'Save'}
-            </Text>
-          </Pressable>
+            {detectedSources.length} video{detectedSources.length === 1 ? '' : 's'} detected on this page
+          </Text>
         </View>
       ) : null}
 
       {/* === Body === */}
-      {isHome ? (
-        <ScrollView
-          style={{ flex: 1, backgroundColor: theme.colors.bg }}
-          contentContainerStyle={{ padding: 16, paddingBottom: 120 }}
-          keyboardShouldPersistTaps="handled"
-        >
-          {/* Logo */}
-          <View style={{ alignItems: 'center', marginVertical: 18 }}>
-            <Text style={{ fontSize: 40, marginBottom: 8 }}>⛰</Text>
-            <Text
-              style={{
-                fontSize: 22,
-                fontWeight: '800',
-                color: '#fff',
-                letterSpacing: -0.5,
-              }}
-            >
-              Everest Flow
-            </Text>
-            <Text style={{ fontSize: 13, color: theme.colors.textFaint, marginTop: 3 }}>
-              Your video universe
-            </Text>
-          </View>
-
-          {/* Search hint (the real input is up top — this row directs attention) */}
-          <Pressable
-            onPress={() => undefined}
-            style={{
-              flexDirection: 'row',
-              alignItems: 'center',
-              backgroundColor: theme.colors.bgCard,
-              borderWidth: 1,
-              borderColor: theme.colors.lineStrong,
-              borderRadius: 14,
-              paddingHorizontal: 14,
-              height: 48,
-              marginBottom: 28,
-            }}
-          >
-            <Text style={{ color: theme.colors.textFaint, fontSize: 14, marginRight: 8 }}>⌕</Text>
-            <Text style={{ color: theme.colors.textFaint, fontSize: 14 }}>
-              Tap the address bar to search or paste a link…
-            </Text>
-          </Pressable>
-
-          {/* Quick Access */}
-          <View style={{ marginBottom: 28 }}>
-            <SectionHeader title="Quick Access" />
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={{ paddingBottom: 4, paddingRight: 8 }}
-            >
-              {BOOKMARKS.map((bm) => (
-                <Pressable
-                  key={bm.label}
-                  onPress={() => loadUrl(bm.url)}
-                  style={{
-                    alignItems: 'center',
-                    gap: 7,
-                    padding: 14,
-                    borderRadius: 14,
-                    backgroundColor: theme.colors.bgCard,
-                    borderWidth: 1,
-                    borderColor: theme.colors.line,
-                    minWidth: 78,
-                    marginRight: 10,
-                  }}
-                >
-                  <View
-                    style={{
-                      width: 42,
-                      height: 42,
-                      borderRadius: 13,
-                      backgroundColor: bm.bg,
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                    }}
-                  >
-                    <Text style={{ fontSize: 20, color: bm.color }}>{bm.icon}</Text>
-                  </View>
-                  <Text
-                    style={{
-                      fontSize: 11,
-                      fontWeight: '600',
-                      color: theme.colors.textMuted,
-                    }}
-                  >
-                    {bm.label}
-                  </Text>
-                </Pressable>
-              ))}
-            </ScrollView>
-          </View>
-
-          {/* Continue watching */}
-          {continueWatching.length > 0 ? (
-            <View style={{ marginBottom: 28 }}>
-              <SectionHeader title="Continue Watching" />
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                contentContainerStyle={{ paddingRight: 8 }}
-              >
-                {continueWatching.map((x) => {
-                  const pct = x.duration && x.duration > 0 ? Math.min(1, x.progress / x.duration) : 0;
-                  return (
-                    <Pressable
-                      key={x.video.videoId}
-                      onPress={() => openVideoFromHome(x.video.videoId)}
-                      style={{
-                        width: 200,
-                        marginRight: 10,
-                        borderRadius: 14,
-                        backgroundColor: theme.colors.bgCard,
-                        borderWidth: 1,
-                        borderColor: theme.colors.line,
-                        overflow: 'hidden',
-                      }}
-                    >
-                      <Thumb
-                        video={x.video}
-                        width={200}
-                        height={113}
-                        radius={0}
-                        showProgress
-                        progress={pct}
-                      />
-                      <View style={{ padding: 10 }}>
-                        <Text
-                          numberOfLines={2}
-                          style={{ color: '#fff', fontSize: 12, fontWeight: '600', lineHeight: 16 }}
-                        >
-                          {x.video.title}
-                        </Text>
-                        <Text
-                          numberOfLines={1}
-                          style={{ color: theme.colors.textFaint, fontSize: 11, marginTop: 2 }}
-                        >
-                          {hostOf(x.video.url)}
-                        </Text>
-                      </View>
-                    </Pressable>
-                  );
-                })}
-              </ScrollView>
-            </View>
-          ) : null}
-
-          {/* Recently saved */}
-          {recent.length > 0 ? (
-            <View>
-              <SectionHeader title="Recently Saved" />
-              {recent.map((v) => {
-                const p = progressList.find((x) => x.videoId === v.videoId);
-                return (
-                  <Pressable
-                    key={v.videoId}
-                    onPress={() => openVideoFromHome(v.videoId)}
-                    style={{
-                      flexDirection: 'row',
-                      gap: 12,
-                      paddingVertical: 10,
-                      borderBottomWidth: 1,
-                      borderBottomColor: theme.colors.line,
-                    }}
-                  >
-                    <Thumb
-                      video={v}
-                      width={96}
-                      height={58}
-                      radius={8}
-                      showProgress
-                      progress={p && p.duration ? p.progress / p.duration : 0}
-                    />
-                    <View style={{ flex: 1 }}>
-                      <Text
-                        numberOfLines={2}
-                        style={{ color: '#fff', fontSize: 13, fontWeight: '600', lineHeight: 18 }}
-                      >
-                        {v.title}
-                      </Text>
-                      <Text
-                        numberOfLines={1}
-                        style={{ color: theme.colors.textFaint, fontSize: 11, marginTop: 2 }}
-                      >
-                        {hostOf(v.url)}
-                      </Text>
-                    </View>
-                  </Pressable>
-                );
-              })}
-            </View>
-          ) : null}
-        </ScrollView>
+      {urlFocused ? (
+        <AutosuggestSheet
+          urlText={addressText}
+          videos={videos}
+          onSelectUrl={(u) => loadUrl(u)}
+          onSelectBookmark={(bm) => loadUrl(bm.url)}
+        />
       ) : (
         <KeyboardSafeView>
           <WebView
@@ -744,8 +723,46 @@ export const BrowseScreen: React.FC = () => {
         </KeyboardSafeView>
       )}
 
+      {/* Floating Save button — wide pill at the bottom whenever a video is detected. */}
+      {!urlFocused && detectedSources.length > 0 ? (
+        <View
+          style={{
+            position: 'absolute',
+            left: 16,
+            right: 16,
+            bottom: 16,
+            zIndex: 50,
+          }}
+        >
+          <Pressable
+            onPress={onSavePress}
+            disabled={saving}
+            style={{
+              height: 48,
+              borderRadius: 100,
+              backgroundColor: theme.colors.brand,
+              alignItems: 'center',
+              justifyContent: 'center',
+              flexDirection: 'row',
+              gap: 8,
+              shadowColor: '#000',
+              shadowOpacity: 0.4,
+              shadowRadius: 16,
+              shadowOffset: { width: 0, height: 6 },
+              elevation: 8,
+              opacity: saving ? 0.7 : 1,
+            }}
+          >
+            <Text style={{ color: '#fff', fontSize: 16, fontWeight: '900' }}>+</Text>
+            <Text style={{ color: '#fff', fontSize: 14, fontWeight: '700' }}>
+              {saving ? 'Saving…' : 'Save video'}
+            </Text>
+          </Pressable>
+        </View>
+      ) : null}
+
       {/* Bottom host strip — only when browsing AND no video detected */}
-      {!isHome && detectedSources.length === 0 ? (
+      {detectedSources.length === 0 ? (
         <View
           style={{
             paddingHorizontal: 16,

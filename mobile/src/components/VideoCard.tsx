@@ -3,7 +3,8 @@ import { Pressable, Text, View } from 'react-native';
 
 import { theme } from '@/theme';
 import { Thumb } from '@/components/Thumb';
-import { relativeTime } from '@/utils/format';
+import { formatDuration, relativeTime } from '@/utils/format';
+import { hostOf } from '@/utils/url';
 import type { Video } from '@/types';
 
 interface Props {
@@ -18,12 +19,6 @@ interface Props {
   duration?: number;
 }
 
-const platformLabel = (p: Video['platform']): string => {
-  if (p === 'youtube') return 'YouTube';
-  if (p === 'vimeo') return 'Vimeo';
-  if (p === 'direct') return 'Direct';
-  return 'Link';
-};
 
 /**
  * Matches the design's `VideoRow`: gradient thumb on the left, two-line title +
@@ -100,16 +95,35 @@ export const VideoCard: React.FC<Props> = ({
           numberOfLines={1}
           style={{ color: theme.colors.textMuted, fontSize: 12, marginBottom: 3 }}
         >
-          {platformLabel(video.platform)}
+          {hostOf(video.url)}
         </Text>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+          {video.durationSec ? (
+            <>
+              <Text style={{ color: theme.colors.textFaint, fontSize: 11 }}>
+                {formatDuration(video.durationSec)}
+              </Text>
+              <Text style={{ color: theme.colors.textFaint, fontSize: 11 }}>·</Text>
+            </>
+          ) : null}
           <Text style={{ color: theme.colors.textFaint, fontSize: 11 }}>
             {relativeTime(video.createdAt)}
           </Text>
-          {pct > 0 ? (
-            <Text style={{ color: theme.colors.brand, fontSize: 11 }}>
-              {Math.round(pct * 100)}%
-            </Text>
+          {pct > 0 && pct < 0.95 ? (
+            <>
+              <Text style={{ color: theme.colors.textFaint, fontSize: 11 }}>·</Text>
+              <Text style={{ color: theme.colors.brand, fontSize: 11, fontWeight: '600' }}>
+                {Math.round(pct * 100)}%
+              </Text>
+            </>
+          ) : null}
+          {pct >= 0.95 ? (
+            <>
+              <Text style={{ color: theme.colors.textFaint, fontSize: 11 }}>·</Text>
+              <Text style={{ color: theme.colors.accent, fontSize: 11, fontWeight: '600' }}>
+                Watched
+              </Text>
+            </>
           ) : null}
         </View>
       </View>
